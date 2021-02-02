@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>
+    Cup Magazine Posts
+  </title>
+  <link rel="stylesheet" href="resources/css/cup.css">
+  <link rel="stylesheet" href="resources/css/cup-mobile.css">
+</head>
+
+<body>
+  <div class="nav-layout">
+    <div class="left-div"> 
+      <span>Post Number</span>
+      <input type="number" value="0" id="post_number">
+      <input type="button" value="LOAD" id="load_post_btn">
+    </div>
+    <div class="right-div"> 
+      <span>Post Day</span>
+      <div class="calender">
+        <div class="calender-control prev">&lt;</div>
+          <input type="text" value="" id="post_day">
+            <div class="calender-control next">&gt;</div>
+        </div>
+      <input type="button" value="LOAD" id="load_post_day_btn">
+    </div>
+  </div>
+  <div class="main">
+    <div class="title-text">New Posts</div>
+    <div class="post-layout">
+    </div>
+    <div class="title-text">Loaded Posts</div>
+    <div class="side-layout">
+    </div>
+  </div>
+  <div class="overlay" id="post-overlay">
+    <div class="header">
+      <span>Model - Concept</span>
+      <button class="save" data-index="1">
+        Save</button>
+    </div>
+    <div class="content">
+    </div>
+    <div class="footer">
+    <button class="save" data-index="1">
+        Save</button>
+    <button class="close" onClick="close_overlay()">
+        Close</button>
+    </div>
+  </div>
+  <div class="notification-container show">
+  </div>
+  <div class="stealth-layout">
+      <div class="stealth-nav"></div>
+      <div class="stealth-main"></div>
+      <div class="stealth-side"></div>
+  </div>
+  <!--   Core JS Files   -->
+  <script>
+    var NODE_ENABLED = false;
+    var ELECTRON = undefined;
+    var SERVER_RUNNING = false;
+    var HOST = undefined;
+    try {
+      window.$ = window.jQuery = require('jquery');
+      ELECTRON = require('electron');
+      NODE_ENABLED = true;
+    } catch {
+      console.log("running without node");
+    }
+    if(["http:", "https:"].indexOf(window.location.protocol) > -1){
+      SERVER_RUNNING = true;
+      HOST = "http://192.168.1.7:9191/";
+    }
+  </script>
+  <script src="resources/js/jquery.min.js"></script>
+  <script src="resources/js/bootstrap.min.js"></script>
+  <script>
+    var DATA = [];
+    var LOAD_POST_QUEUE = [];
+    var ERRORS = {
+      "LOAD_POSTS_DATA": "Data Not Found",
+      "LOAD_POSTS_ERROR": "Error",
+      "LOAD_POST_DATA": "Post Data Not Found",
+      "LOAD_POST_ERROR": "Error",
+      "SAVE_POST_FAILED": "Saving Failed",
+      "SAVE_POST_ERROR": "Error"
+    };
+    var LOAD_POST_INTERVAL = undefined;
+
+    $(document).ready(function () {
+      
+      // registerEvents();
+      let today = new Date();
+      $("#post_day").val(today.getDate()+"-"+(today.getMonth()+1)+"-"+today.getFullYear());
+
+      $("#load_post_btn").on("click", function (event) {
+        loadPosts();
+      });
+      
+      $("#load_post_day_btn").on("click", function (event) {
+        loadPostsByDay();
+      });
+
+      $(".calender-control").on("click", function (event) {
+        let date = $("#post_day").val();
+        date = date.split("-");
+        let selDate = new Date(date[1]+"-"+date[0]+"-"+date[2]) // format month-day-year
+        if($(event.currentTarget).hasClass("prev")){
+          step = -1;
+        }else{
+          step = 1;
+        }
+        selDate.setDate(selDate.getDate() + step);
+        $("#post_day").val(selDate.getDate()+"-"+(selDate.getMonth()+1)+"-"+selDate.getFullYear());
+      });
+      
+      $("#post-overlay button.save").on("click", function (event) {
+        let index = $(event.currentTarget).attr("data-index");
+        savePost(index);
+      });
+      
+      $(document).on("keydown", (e) => {
+        if (e.key == "Escape" || e.key == 'q' || e.key == 'Q') {
+          e.preventDefault();
+          e.stopPropagation();
+          close_overlay();
+        }
+        if(e.key == 's' || e.key == 'S'){
+          e.preventDefault();
+          e.stopPropagation();
+          let index = $('body.show-overlay #post-overlay button.save').attr('data-index');
+          if(index){
+            savePost(index);
+          }
+        }
+        if (e.key == "h" || e.key == 'H') {
+          e.preventDefault();
+          e.stopPropagation();
+          $("body").addClass("stealth");
+          $("div.stealth-layout").html(DATA);
+        }
+        if (e.key == "z" || e.key == 'Z') {
+          e.preventDefault();
+          e.stopPropagation();
+          $("body").removeClass("stealth");
+        }
+      });
+      
+    });
+
+    function close_overlay(){
+      $("body").removeClass("show-overlay");
+    }
+
+    function registerEvents() {
+      // when posts in post-layout are clicked, move them to side-layout and call apis to load its data
+      $(".post-layout .post").off("click").on("click", function (event) {
+        let $ele = $(event.currentTarget);
+        let index= $ele.attr("data-index");
+        $(".side-layout").append(getPostHtml(index, $ele.find("img").attr("src"), "loading"));
+        $ele.remove();
+
+        if(LOAD_POST_QUEUE.length == 0){
+          loadPost(index);
+        }
+        LOAD_POST_QUEUE.push(index);
+        
+        registerEvents();
+      });
+
+      // when posts in side-layout are click, open post overlay for showing post images
+      $(".side-layout .post").off("click").on("click", function (event) {
+        let $ele = $(event.currentTarget);
+        let index = $ele.attr("data-index");
+        if($ele.hasClass("failed")){
+          $ele.addClass("loading").removeClass("failed");
+          
+          if(LOAD_POST_QUEUE.length == 0){
+            loadPost(index);
+          }
+          LOAD_POST_QUEUE.push(index);
+        }else if(!$ele.hasClass("loading") && !$ele.hasClass("failed")){
+          showPostOverlay(index);
+        }
+      });
+    }
+    
+    function getPostHtml(index, img_url, cls="") {
+      if(SERVER_RUNNING){
+        img_url = img_url.replace("https","http");
+      }
+      let postHtml = '<div class="post ' + cls + '" data-index="' + index + '"> \
+        <img src="'+ img_url + '" /> \
+      </div>';
+      return postHtml;
+    }
+    
+    function showPostOverlay(index) {
+      $("body").addClass("show-overlay");
+      $("#post-overlay button.save").attr("data-index", index);
+      $($("#post-overlay .header span")[0]).html(DATA[index]["model"]+" - "+DATA[index]["concept"]);
+      $($("#post-overlay .content")[0]).html("");
+      let i=0;
+      for(img of DATA[index]["images"]){
+        if(i==8){
+          break;
+        }
+        $($("#post-overlay .content")[0]).append(getPostHtml("", img));
+        i+=1;
+      }
+    }    
+
+    function loadPosts() {
+      let postNo = $("#post_number").val();
+      let errors = {info: "LOAD_POSTS_DATA", error: "LOAD_POSTS_ERROR"};
+      if (ELECTRON) {
+        // Call ipcMain api to load posts by post number
+        ELECTRON.ipcRenderer.send(
+          "loadPosts", 
+          postNo, 
+          errors
+        );
+      }
+    }
+    
+    function loadPostsByDay() {
+      let postNo = $("#post_number").val();
+      let date = $("#post_day").val();
+      date = date.split("-");
+      date = {day: parseInt(date[0]), month: parseInt(date[1]), year: parseInt(date[2])};
+      let errors = {info: "LOAD_POSTS_DATA", error: "LOAD_POSTS_ERROR"};
+      if (ELECTRON) {
+        // Call ipcMain api to load posts by date
+        ELECTRON.ipcRenderer.send(
+          "loadPostsByDay", 
+          postNo, 
+          date,
+          errors
+        );
+      }else if(SERVER_RUNNING){
+        $.ajax({
+          "url": HOST + "get_posts_by_day/",
+          "method": "POST",
+          "dataType": "json",
+          "contentType": "application/json",
+          "data": JSON.stringify({"year": date.year, "month": date.month, "day": date.day})
+        }).done((res) => {
+          if (res["data"] !== null) {
+            newPosts(res["data"]["posts"], parseInt(postNo));
+          }else{
+            notify({
+              "status": errors.info, 
+              "message": "No data for day: "+date.day+"-"+date.month+"-"+date.year
+            });
+          }
+        }).fail((err) => {
+          console.log(err);
+          notify({
+            "status": errors.error, 
+            "message": "Error while loading posts for day: "+date.day+"-"+date.month+"-"+date.year
+          });
+        });
+      }
+    }
+    
+    function loadPost(index) {
+      let post_url = DATA[index].post_url;
+      let errors = {info: "LOAD_POST_DATA", error: "LOAD_POST_ERROR"};
+      if (ELECTRON) {
+        // Call ipcMain api to load single post data
+        ELECTRON.ipcRenderer.send(
+          "loadPost", 
+          index, 
+          post_url,
+          errors
+        );
+      }else if(SERVER_RUNNING){
+        $.ajax({
+          "url": HOST + "get_post_images/",
+          "method": "POST",
+          "dataType": "json",
+          "contentType": "application/json",
+          "data": JSON.stringify({ "post_url": postUrl })
+        }).done((res) => {
+          if(res["data"] !== null){
+            postResult(res["data"], index);
+          }else{
+            notify({
+              "status": errors.info, 
+              "message": "No data for post: "+postUrl,
+              "index": index
+            });
+          }
+        }).fail((err) => {
+          console.log(err);
+          notify({
+            "status": errors.error, 
+            "message": "Error while loading post: "+postUrl,
+            "index": index
+          });
+        });
+      }
+    }
+    
+    function savePost(index) {
+      let post_url = DATA[index].post_url;
+      let errors = {info: "SAVE_POST_FAILED", error: "SAVE_POST_ERROR"};
+      if(DATA[index]["saved"]){
+        return;
+      }
+      $(".side-layout").find("div.post[data-index='"+index+"']").addClass("saving");
+        
+      if(ELECTRON) {
+        // Call ipcMain api to save post
+        ELECTRON.ipcRenderer.send(
+          "savePost", 
+          index, 
+          post_url,
+          errors
+        );
+      }else if(SERVER_RUNNING){
+        $.ajax({
+          "url": HOST + "save_post/",
+          "method": "POST",
+          "dataType": "json",
+          "contentType": "application/json",
+          "data": JSON.stringify({ "post_url": postUrl })
+        }).done((res) => {
+          if(res["data"] == "success"){
+            postSaved(index);
+          }else{
+            notify({
+              "status": errors.info, 
+              "message": "Unable to save post: "+postUrl,
+              "index": index
+            });
+          }
+        }).fail((err) => {
+          console.log(err);
+          notify({
+            "status": errors.error, 
+            "message": "Error while saving post: "+postUrl,
+            "index": index
+          });
+        });
+      }
+    }
+    
+    function load_next_post(index){
+      if(LOAD_POST_QUEUE.indexOf(index) > -1){
+        LOAD_POST_QUEUE.splice(LOAD_POST_QUEUE.indexOf(index), 1);
+      }
+      if(LOAD_POST_QUEUE.length > 0){
+        loadPost(LOAD_POST_QUEUE[0]);
+      }
+    }
+
+    // Callback Functions
+    function newPosts(res, nextPostNo){
+      DATA = res;
+      if(nextPostNo){
+        $("#post_number").val(nextPostNo);
+      }
+      $(".post-layout").html("");
+      $(".side-layout").html("");
+      for (let i=0; i<DATA.length; i++) {
+        if(DATA[i]["exists"]){
+          let cls = "";
+          if(DATA[i]["saved"]){
+            cls = "saved";
+          }
+          $(".side-layout").append(getPostHtml(i, DATA[i]["thumb_url"], cls));
+        }else{
+          $(".post-layout").append(getPostHtml(i, DATA[i]["thumb_url"]));
+        }
+      }          
+      registerEvents();
+    }
+
+    function postResult(res, index){
+      DATA[index]["images"] = res["images"];
+      DATA[index]["concept"] = res["concept"];
+      DATA[index]["model"] = res["model"];
+      DATA[index]["published_on"] = res["published_on"];
+      $(".side-layout").find("div.post[data-index='"+index+"']").removeClass("loading");
+      load_next_post(index);
+    }
+
+    function postSaved(index){
+      DATA[index]["saved"] = true;
+      $(".side-layout").find("div.post[data-index='"+index+"']").removeClass("saving").addClass("saved");
+    }
+
+    function notify(data){
+      // console.log(ERRORS[data.status]+": "+data.message);
+      if(data.status == "LOAD_POST_DATA" || data.status == "LOAD_POST_ERROR"){
+        $(".side-layout .post[data-index='"+data.index+"']").addClass("failed").removeClass('loading');
+        load_next_post(data.index);
+      }       
+      let cls = "";
+      if(data.status.indexOf("ERROR") > -1){
+        cls = "error";
+      }
+      $(".notification-container").prepend('<div class="notification '+cls+'"> \
+        <div class="header"> '+ERRORS[data.status]+' </div> \
+        <hr/> \
+        <div class="content"> '+data.message+' </div> \
+      </div>');
+      $(".notification").off('click').on("click", function(event){
+        $(event.currentTarget).remove();
+      });
+    }
+    
+
+    if(NODE_ENABLED){
+      // Called by ipcMain when new posts are available 
+      ELECTRON.ipcRenderer.on("newPosts", (event, nextPostNo, res)=>{
+        newPosts(res, nextPostNo);
+      });
+      
+      // Called by ipcMain when post data is available 
+      ELECTRON.ipcRenderer.on("postResult", (event, index, res) => {
+        postResult(res, index);
+      });
+
+      // Called by ipcMain when post saved successfully
+      ELECTRON.ipcRenderer.on("postSaved", (event, index) => {
+        postSaved(index);
+      });
+      
+      // Called by ipcMain for notification
+      ELECTRON.ipcRenderer.on("notify", (event, data)=>{
+        notify(data);
+      });
+    }
+
+    // "mongodb": "^3.6.3",
+    // "mysql": "^2.18.1",
+    // "request-promise": "^4.2.6",
+    // "sqlite3": "^5.0.0"
+  </script>
+</body>
+
+</html>
