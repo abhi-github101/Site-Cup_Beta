@@ -1,0 +1,204 @@
+ 
+    .nav-layout {
+      display: grid;
+      grid-template-columns: 25% auto 25%;
+      grid-template-columns: 50% 50%;
+      padding: 10px;
+      color: #fff;
+    }
+
+    .nav-layout div {
+      /* grid-column-start: 2; */
+      font-size: 1.2em;
+      justify-self: center;
+    }
+
+    input {
+      padding: 8px;
+      border-radius: 25px;
+    }
+
+    body {
+      background-color: #1e1e2f;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 80% 20%;
+    }
+
+    .post-layout {
+      display: grid;
+      grid-template-columns: repeat(4, 25%);
+      grid-auto-rows: max-content;
+    }
+
+    .post {
+      border-radius: 10px;
+      height: fit-content;
+      background-color: #eee;
+      box-shadow: 0 1px 20px 0 rgba(255, 255, 255, .3);
+      margin: 10px;
+    }
+
+    input#post_number, input#post_day {
+      text-align: center;
+    }
+
+    input#post_day {
+      width: 25%;
+    }
+
+    .post img {
+      width: 100%;
+      border-radius: 5px;
+    }
+
+    input[type="button"]:hover {
+      cursor: pointer;
+    }
+
+    .post:hover {
+      cursor: pointer;
+      transform: scale(1.01);
+    }
+
+    .side-layout {
+      display: grid;
+      grid-auto-rows: max-content;
+    }
+
+    .side-layout .post {
+      width: 150px;
+      justify-self: center;
+    }
+
+    .side-layout .post.loading {
+      opacity: 0.2;
+    }
+
+    .side-layout .post.saving {
+      border-style: solid;
+      border-color: rgb(247, 79, 79);
+    }
+    .side-layout .post.saved {
+      border-style: solid;
+      border-color: gold;
+    }
+
+    .side-layout .post.failed {
+      background-color: red;
+    }
+    .side-layout .post.failed img {
+      opacity: 0.4;
+    }
+
+    .show-overlay {
+      overflow: hidden;
+    }
+
+    .overlay {
+      display: none;
+      position: relative;
+    }
+
+    .show-overlay .overlay {
+      display: block;
+      height: 96vh;
+      width: 98vw;
+      background-color: #fffe;
+      position: fixed;
+      top: 0px;
+      margin: 10px;
+      overflow-y: auto;
+      border-radius: 10px;
+    }
+
+    .overlay .content {
+      display: grid;
+      grid-template-columns: repeat(4, 25%);
+      grid-auto-rows: max-content;
+    }
+
+    .overlay .header {
+      padding: 10px;
+    }
+
+    .overlay .header button {
+      cursor: pointer;
+    }
+
+    .notification-container {
+      display: none;
+      position: relative;
+    }
+
+    .notification-container.show {
+      display: block;
+      height: fit-content;
+      max-height: 90vh;
+      width: 20vw;
+      position: fixed;
+      top: 60px;
+      right: 0px;
+      margin: 10px;
+      overflow-y: auto;
+    }
+    .notification{
+      background-color: #fff6;
+      padding: 10px;
+      color: #fff;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    .notification:hover{
+      cursor: pointer;
+    }
+    .notification.error{
+      background-color: #f007;
+    }
+    .notification .header{
+      font-weight: 800;
+    }
+    body.stealth div.nav-layout, body.stealth div.main, body.stealth div.overlay, body.stealth div.notification-container{
+      display: none !important;
+      opacity: 0 !important;
+    }
+    .stealth-layout{
+      display: none;
+    }
+    
+    body.stealth .stealth-layout{
+      display: grid;
+      grid-template-columns: 80vw 20vw;
+      grid-template-rows: 10vh 90vh;
+    }
+    body.stealth .stealth-nav {
+      grid-column-start: 1;
+      grid-column-end: 3;
+    }
+    .calender {
+      width: 10%;
+      height: 100%;
+      display: inline;
+    }
+  
+  .calender-control.prev, .calender-control.next {
+      font-size: 0.8em;
+      background-color: #fff;
+      color: #000;
+      width: 10%;
+      padding: 5px;
+      text-align: center;
+      border-radius: 60px;
+      display: inline-block;
+      cursor: pointer;
+  }
+  div.title-text{
+    display: none;
+    font-size: 1.5em;
+    color: white;
+}
+#post-overlay .footer{
+  display: none;
+}
